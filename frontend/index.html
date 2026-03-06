@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VARUTRI CONTROL INTERFACE</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="control-interface">
+        <!-- Top Header -->
+        <header class="top-header">
+            <div class="header-left">
+                <span class="logo">VARUTRI HONEYPOT SYSTEM</span>
+            </div>
+            <div class="header-right">
+                <span class="timestamp" id="timestamp"></span>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Sessions List View (Default) -->
+            <div class="sessions-view" id="sessionsView">
+                <!-- Active Sessions -->
+                <div class="sessions-section">
+                    <div class="section-header">
+                        <span>ACTIVE SESSIONS</span>
+                        <span class="session-count" id="activeCount">0</span>
+                    </div>
+                    <div class="sessions-list" id="activeSessions">
+                        <div class="empty-state">No active sessions</div>
+                    </div>
+                </div>
+
+                <!-- Recent Sessions -->
+                <div class="sessions-section">
+                    <div class="section-header">
+                        <span>RECENT SESSIONS</span>
+                        <span class="session-count" id="recentCount">0</span>
+                    </div>
+                    <div class="sessions-list" id="recentSessions">
+                        <div class="empty-state">No recent sessions</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Conversation View (Hidden by default) -->
+            <div class="conversation-view hidden" id="conversationView">
+                <!-- Left Panel: Conversation -->
+                <div class="left-panel">
+                    <div class="panel-header">
+                        <button class="back-btn" onclick="showSessionsList()">← BACK TO SESSIONS</button>
+                        <div class="session-meta">
+                            <span id="currentSessionId">SESSION-001</span>
+                            <span class="separator">|</span>
+                            <span id="currentChannel">WHATSAPP</span>
+                        </div>
+                    </div>
+
+                    <!-- Conversation Feed -->
+                    <div class="conversation-feed" id="conversationFeed">
+                        <div class="system-msg">
+                            <span class="msg-timestamp">[SYSTEM]</span>
+                            <span class="msg-content">Select a session to view conversation</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Panel: Intelligence -->
+                <div class="right-panel">
+                    <!-- AI Intervention Stats -->
+                    <div class="stats-section">
+                        <div class="section-header">AI INTERVENTION</div>
+                        <div class="stats-grid">
+                            <div class="stat-item">
+                                <div class="stat-label">TOTAL MESSAGES</div>
+                                <div class="stat-value" id="totalMessages">0</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">AI RESPONSES</div>
+                                <div class="stat-value" id="aiResponses">0</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">SCAMMER MSGS</div>
+                                <div class="stat-value" id="scammerMessages">0</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">DURATION</div>
+                                <div class="stat-value" id="sessionDuration">0m</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Threat Assessment -->
+                    <div class="threat-section">
+                        <div class="section-header">THREAT LEVEL</div>
+                        <div class="threat-display">
+                            <div class="threat-meter">
+                                <div class="threat-fill" id="threatFill"></div>
+                                <div class="threat-percentage" id="threatPercent">0%</div>
+                            </div>
+                            <div class="threat-classification" id="threatClass">SAFE</div>
+                        </div>
+                    </div>
+
+                    <!-- Scam Classification -->
+                    <div class="data-section">
+                        <div class="section-header">CLASSIFICATION</div>
+                        <div class="data-table">
+                            <div class="data-row">
+                                <span class="data-label">TYPE:</span>
+                                <span class="data-value" id="scamType">UNKNOWN</span>
+                            </div>
+                            <div class="data-row">
+                                <span class="data-label">CONFIDENCE:</span>
+                                <span class="data-value" id="confidence">N/A</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Intelligence Extracted -->
+                    <div class="intel-section">
+                        <div class="section-header">INTELLIGENCE EXTRACTED</div>
+                        <div class="intel-container" id="intelContainer">
+                            <div class="intel-empty">No intelligence gathered</div>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="actions-section">
+                        <button class="action-btn" onclick="generateReport()">GENERATE REPORT</button>
+                        <button class="action-btn" onclick="runTests()">RUN DIAGNOSTICS</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Status Bar -->
+        <footer class="status-bar">
+            <div class="status-left">
+                <span class="status-item">SYSTEM: <span class="status-online">ONLINE</span></span>
+                <span class="status-item">ENCRYPTION: <span class="status-online">ACTIVE</span></span>
+            </div>
+            <div class="status-right">
+                <span class="status-item">REPORTS GENERATED: <span id="totalReports">0</span></span>
+            </div>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

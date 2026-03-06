@@ -1,0 +1,28 @@
+# Azure App Service Configuration
+# This file is used for Azure deployment configuration
+
+# Web App Settings
+runtime: java:17-java17
+startup-command: java -jar /home/site/wwwroot/honeypot-1.0.0.jar
+
+# Health Check (optional but recommended)
+health-check-path: /actuator/health
+
+# Startup Time (increase if needed)
+startup-timeout: 300
+
+# Connection Settings
+http20-enabled: true
+always-on: false  # Set to true for B1 tier and above (not available in F1)
+
+# Logging
+http-logs-enabled: true
+app-logs-enabled: true
+detailed-error-messages: true
+
+# Environment Variables (Set via Azure CLI or Portal)
+# HUGGINGFACE_API_KEY
+# MONGODB_URI
+# MONGODB_DATABASE
+# VARUTRI_API_KEY
+# HACKATHON_CALLBACK_URL
