@@ -55,13 +55,15 @@
             <scope>provided</scope>
         </dependency>
         
-        <!-- Spring Boot DevTools for hot reload -->
+        <!-- Spring Boot DevTools removed to avoid ClassLoader conflicts during AWS SDK testing -->
+        <!--
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-devtools</artifactId>
             <scope>runtime</scope>
             <optional>true</optional>
         </dependency>
+        -->
         
         <!-- Spring Boot Starter Test -->
         <dependency>
@@ -77,10 +79,22 @@
             <scope>test</scope>
         </dependency>
         
-        <!-- Spring Data MongoDB for persistent storage -->
+        <!-- AWS Bedrock Runtime (Claude LLM) -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-mongodb</artifactId>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>bedrockruntime</artifactId>
+        </dependency>
+        
+        <!-- AWS DynamoDB -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>dynamodb</artifactId>
+        </dependency>
+        
+        <!-- AWS DynamoDB Enhanced Client (annotation-based ORM) -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>dynamodb-enhanced</artifactId>
         </dependency>
         
         <!-- Dotenv for loading environment variables from .env file -->
@@ -111,28 +125,20 @@
             <version>1.11.0</version>
         </dependency>
         
-        <!-- Deep Java Library (DJL) - Core API -->
-        <dependency>
-            <groupId>ai.djl</groupId>
-            <artifactId>api</artifactId>
-            <version>0.26.0</version>
-        </dependency>
-        
-        <!-- DJL PyTorch Engine -->
-        <dependency>
-            <groupId>ai.djl.pytorch</groupId>
-            <artifactId>pytorch-engine</artifactId>
-            <version>0.26.0</version>
-            <scope>runtime</scope>
-        </dependency>
-        
-        <!-- DJL Hugging Face Tokenizers -->
-        <dependency>
-            <groupId>ai.djl.huggingface</groupId>
-            <artifactId>tokenizers</artifactId>
-            <version>0.26.0</version>
-        </dependency>
+        <!-- DJL dependencies REMOVED — ML inference moved to Python sidecar (ml-sidecar/) -->
     </dependencies>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>2.25.16</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     
     <build>

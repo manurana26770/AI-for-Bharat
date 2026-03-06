@@ -6,7 +6,7 @@ import com.varutri.honeypot.service.data.SessionStore;
 import com.varutri.honeypot.service.core.CallbackService;
 import com.varutri.honeypot.service.ai.InformationExtractor;
 import com.varutri.honeypot.service.ai.EnsembleThreatScorer;
-import com.varutri.honeypot.service.llm.HuggingFaceService;
+import com.varutri.honeypot.service.llm.ChatLlmService;
 import com.varutri.honeypot.service.data.EvidenceCollector;
 
 import com.varutri.honeypot.dto.ApiResponse;
@@ -39,7 +39,7 @@ import java.util.Optional;
 public class HoneypotController {
 
     @Autowired
-    private Optional<HuggingFaceService> huggingFaceService;
+    private Optional<ChatLlmService> chatLlmService;
 
     @Autowired
     private SessionStore sessionStore;
@@ -201,13 +201,13 @@ public class HoneypotController {
             List<ChatRequest.ConversationMessage> conversationHistory,
             String scamType, double threatLevel) {
 
-        if (huggingFaceService.isPresent()) {
-            return huggingFaceService.get().generateResponseAsync(userMessage, conversationHistory, scamType,
+        if (chatLlmService.isPresent()) {
+            return chatLlmService.get().generateResponseAsync(userMessage, conversationHistory, scamType,
                     threatLevel);
         } else {
             return java.util.concurrent.CompletableFuture.failedFuture(
                     new IllegalStateException(
-                            "No LLM service configured. Please set llm.provider to 'huggingface'"));
+                            "No LLM service configured. Please set llm.provider to 'huggingface' or 'bedrock'"));
         }
     }
 
@@ -223,7 +223,7 @@ public class HoneypotController {
                 "status", "healthy",
                 "service", "varutri-honeypot",
                 "llmProvider", llmProvider,
-                "huggingFaceAvailable", huggingFaceService.isPresent());
+                "llmAvailable", chatLlmService.isPresent());
 
         return ApiResponse.ok(healthData, "Service is healthy");
     }

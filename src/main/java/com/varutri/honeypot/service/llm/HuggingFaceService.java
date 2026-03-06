@@ -33,7 +33,7 @@ import java.util.List;
 @Slf4j
 @Service
 @ConditionalOnProperty(name = "llm.provider", havingValue = "huggingface")
-public class HuggingFaceService {
+public class HuggingFaceService implements ChatLlmService {
 
     private final WebClient chatWebClient;
     private final String model;
@@ -80,6 +80,7 @@ public class HuggingFaceService {
      * @param scamType            Detected scam type (or UNKNOWN)
      * @param threatLevel         Detected threat level (0.0 to 1.0)
      */
+    @Override
     public String generateResponse(String userMessage, List<ChatRequest.ConversationMessage> conversationHistory,
             String scamType, double threatLevel) {
 
@@ -241,11 +242,53 @@ public class HuggingFaceService {
     /**
      * Generate response asynchronously
      */
+    @Override
     public java.util.concurrent.CompletableFuture<String> generateResponseAsync(String userMessage,
             List<ChatRequest.ConversationMessage> conversationHistory,
             String scamType, double threatLevel) {
         return java.util.concurrent.CompletableFuture
                 .supplyAsync(() -> generateResponse(userMessage, conversationHistory, scamType, threatLevel));
+    }
+
+    @Override
+    public java.util.concurrent.CompletableFuture<String> analyzeContextAsync(
+            String systemPrompt, String userPrompt) {
+        return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try {
+                List<Message> messages = new java.util.ArrayList<>();
+                Message systemMsg = new Message();
+                systemMsg.setRole("system");
+                systemMsg.setContent(systemPrompt);
+                messages.add(systemMsg);
+
+                Message userMsg = new Message();
+                userMsg.setRole("user");
+                userMsg.setContent(userPrompt);
+                messages.add(userMsg);
+
+                ChatCompletionRequest request = new ChatCompletionRequest();
+                request.setModel(model);
+                request.setMessages(messages);
+                request.setMaxTokens(500);
+                request.setTemperature(0.3);
+
+                ChatCompletionResponse response = chatWebClient.post()
+                        .uri("/chat/completions")
+                        .bodyValue(request)
+                        .retrieve()
+                        .bodyToMono(ChatCompletionResponse.class)
+                        .timeout(java.time.Duration.ofSeconds(30))
+                        .block();
+
+                if (response != null && response.getChoices() != null && !response.getChoices().isEmpty()) {
+                    return response.getChoices().get(0).getMessage().getContent().trim();
+                }
+                return "";
+            } catch (Exception e) {
+                log.error("HuggingFace context analysis failed: {}", e.getMessage());
+                return "";
+            }
+        });
     }
 
     // ========================================================================

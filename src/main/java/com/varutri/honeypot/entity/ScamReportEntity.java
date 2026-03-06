@@ -1,37 +1,30 @@
 package com.varutri.honeypot.entity;
 
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
-import org.springframework.data.mongodb.core.index.Indexed;
+import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbBean;
+import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbPartitionKey;
+import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbSecondaryPartitionKey;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * MongoDB entity for storing government scam reports
+ * DynamoDB entity for storing government scam reports.
+ * Table: varutri_scam_reports | Partition Key: reportId | GSI: sessionId-index
  */
 @Data
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(collection = "scam_reports")
+@DynamoDbBean
 public class ScamReportEntity {
 
-    @Id
-    private String id;
-
-    @Indexed(unique = true)
     private String reportId;
 
-    @Indexed
     private String sessionId;
 
-    private LocalDateTime timestamp;
+    private String timestamp;
 
     // Scam details
     private String scamType;
@@ -39,17 +32,11 @@ public class ScamReportEntity {
     private int totalMessages;
 
     // Extracted intelligence
-    @Builder.Default
     private List<String> upiIds = new ArrayList<>();
-    @Builder.Default
     private List<String> bankAccounts = new ArrayList<>();
-    @Builder.Default
     private List<String> ifscCodes = new ArrayList<>();
-    @Builder.Default
     private List<String> phoneNumbers = new ArrayList<>();
-    @Builder.Default
     private List<String> urls = new ArrayList<>();
-    @Builder.Default
     private List<String> suspiciousKeywords = new ArrayList<>();
 
     // Full conversation
@@ -58,22 +45,31 @@ public class ScamReportEntity {
     // Metadata
     private String victimProfile;
     private String reportedBy;
-    private ReportStatus status;
+    private String status;
+
+    @DynamoDbPartitionKey
+    public String getReportId() {
+        return reportId;
+    }
+
+    @DynamoDbSecondaryPartitionKey(indexNames = "sessionId-index")
+    public String getSessionId() {
+        return sessionId;
+    }
 
     @Data
-    @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @DynamoDbBean
     public static class ConversationTurn {
-        private LocalDateTime timestamp;
+        private String timestamp;
         private String sender;
         private String message;
     }
 
-    public enum ReportStatus {
-        PENDING,
-        SENT,
-        FAILED,
-        ARCHIVED
-    }
+    // Status constants (replaces enum for DynamoDB compatibility)
+    public static final String STATUS_PENDING = "PENDING";
+    public static final String STATUS_SENT = "SENT";
+    public static final String STATUS_FAILED = "FAILED";
+    public static final String STATUS_ARCHIVED = "ARCHIVED";
 }

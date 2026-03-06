@@ -1,36 +1,29 @@
 package com.varutri.honeypot.entity;
 
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
-import org.springframework.data.mongodb.core.index.Indexed;
+import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbBean;
+import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbPartitionKey;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * MongoDB entity for storing evidence packages from scam conversations
+ * DynamoDB entity for storing evidence packages from scam conversations.
+ * Table: varutri_evidence | Partition Key: sessionId
  */
 @Data
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(collection = "evidence")
+@DynamoDbBean
 public class EvidenceEntity {
 
-    @Id
-    private String id;
-
-    @Indexed(unique = true)
     private String sessionId;
 
-    private LocalDateTime firstContact;
+    private String firstContact;
 
-    private LocalDateTime lastUpdated;
+    private String lastUpdated;
 
     private String scamType;
 
@@ -40,15 +33,20 @@ public class EvidenceEntity {
 
     private ExtractedIntelligence extractedInfo;
 
+    @DynamoDbPartitionKey
+    public String getSessionId() {
+        return sessionId;
+    }
+
     /**
      * Conversation turn record
      */
     @Data
-    @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @DynamoDbBean
     public static class ConversationTurn {
-        private LocalDateTime timestamp;
+        private String timestamp;
         private String userMessage;
         private String assistantReply;
     }
@@ -57,23 +55,16 @@ public class EvidenceEntity {
      * Extracted intelligence from scam messages
      */
     @Data
-    @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @DynamoDbBean
     public static class ExtractedIntelligence {
-        @Builder.Default
         private List<String> upiIds = new ArrayList<>();
-        @Builder.Default
         private List<String> bankAccountNumbers = new ArrayList<>();
-        @Builder.Default
         private List<String> ifscCodes = new ArrayList<>();
-        @Builder.Default
         private List<String> phoneNumbers = new ArrayList<>();
-        @Builder.Default
         private List<String> urls = new ArrayList<>();
-        @Builder.Default
         private List<String> emails = new ArrayList<>();
-        @Builder.Default
         private List<String> suspiciousKeywords = new ArrayList<>();
     }
 
@@ -81,14 +72,14 @@ public class EvidenceEntity {
      * Initialize with session ID
      */
     public static EvidenceEntity createNew(String sessionId) {
-        return EvidenceEntity.builder()
-                .sessionId(sessionId)
-                .firstContact(LocalDateTime.now())
-                .lastUpdated(LocalDateTime.now())
-                .scamType("UNKNOWN")
-                .threatLevel(0.0)
-                .conversation(new ArrayList<>())
-                .extractedInfo(new ExtractedIntelligence())
-                .build();
+        EvidenceEntity entity = new EvidenceEntity();
+        entity.setSessionId(sessionId);
+        entity.setFirstContact(java.time.LocalDateTime.now().toString());
+        entity.setLastUpdated(java.time.LocalDateTime.now().toString());
+        entity.setScamType("UNKNOWN");
+        entity.setThreatLevel(0.0);
+        entity.setConversation(new ArrayList<>());
+        entity.setExtractedInfo(new ExtractedIntelligence());
+        return entity;
     }
 }

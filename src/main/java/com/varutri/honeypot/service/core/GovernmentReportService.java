@@ -1,4 +1,5 @@
 package com.varutri.honeypot.service.core;
+
 import com.varutri.honeypot.service.data.EvidenceCollector;
 
 import com.varutri.honeypot.dto.ExtractedInfo;
@@ -21,7 +22,7 @@ import java.util.stream.Collectors;
 
 /**
  * Service for reporting scams to government authorities
- * Now uses MongoDB for persistent report storage
+ * Uses DynamoDB for persistent report storage
  */
 @Slf4j
 @Service
@@ -50,7 +51,7 @@ public class GovernmentReportService {
         boolean highThreat = threatLevel >= autoReportThreshold;
 
         if (highThreat) {
-            log.warn("🚨 High threat detected ({}): Auto-reporting session {}",
+            log.warn("\uD83D\uDEA8 High threat detected ({}): Auto-reporting session {}",
                     String.format("%.2f", threatLevel), sessionId);
         }
 
@@ -97,7 +98,7 @@ public class GovernmentReportService {
                 .status(ScamReport.ReportStatus.PENDING)
                 .build();
 
-        log.info("📋 Generated report {} for session {}", report.getReportId(), sessionId);
+        log.info("\uD83D\uDCCB Generated report {} for session {}", report.getReportId(), sessionId);
         return report;
     }
 
@@ -111,7 +112,7 @@ public class GovernmentReportService {
 
             // In production, integrate with email service (JavaMail, SendGrid, etc.)
             // For now, log and save to file
-            log.warn("📧 GOVERNMENT REPORT - Would send to {}", reportEmail);
+            log.warn("\uD83D\uDCE7 GOVERNMENT REPORT - Would send to {}", reportEmail);
             log.warn("Report ID: {}", report.getReportId());
             log.warn("Threat Level: {}", String.format("%.2f", report.getThreatLevel()));
             log.warn("Intelligence: {} UPI IDs, {} Bank Accounts, {} Phone Numbers, {} URLs",
@@ -126,10 +127,10 @@ public class GovernmentReportService {
             report.setStatus(ScamReport.ReportStatus.SENT);
             archiveReport(report);
 
-            log.info("✅ Report {} sent successfully", report.getReportId());
+            log.info("\u2705 Report {} sent successfully", report.getReportId());
 
         } catch (Exception e) {
-            log.error("❌ Failed to send report {}: {}", report.getReportId(), e.getMessage(), e);
+            log.error("\u274C Failed to send report {}: {}", report.getReportId(), e.getMessage(), e);
             report.setStatus(ScamReport.ReportStatus.FAILED);
             archiveReport(report);
         }
@@ -235,7 +236,7 @@ public class GovernmentReportService {
                 writer.write(reportText);
             }
 
-            log.info("💾 Report saved to file: {}", filename);
+            log.info("\uD83D\uDCBE Report saved to file: {}", filename);
 
         } catch (Exception e) {
             log.error("Failed to save report to file: {}", e.getMessage(), e);
@@ -243,51 +244,52 @@ public class GovernmentReportService {
     }
 
     /**
-     * Archive report for audit trail (persisted to MongoDB)
+     * Archive report for audit trail (persisted to DynamoDB)
      */
     public void archiveReport(ScamReport report) {
         try {
-            // Convert to entity
-            ScamReportEntity entity = ScamReportEntity.builder()
-                    .reportId(report.getReportId())
-                    .sessionId(report.getSessionId())
-                    .timestamp(report.getTimestamp())
-                    .scamType(report.getScamType())
-                    .threatLevel(report.getThreatLevel())
-                    .totalMessages(report.getTotalMessages())
-                    .upiIds(new ArrayList<>(report.getUpiIds()))
-                    .bankAccounts(new ArrayList<>(report.getBankAccounts()))
-                    .ifscCodes(new ArrayList<>(report.getIfscCodes()))
-                    .phoneNumbers(new ArrayList<>(report.getPhoneNumbers()))
-                    .urls(new ArrayList<>(report.getUrls()))
-                    .suspiciousKeywords(new ArrayList<>(report.getSuspiciousKeywords()))
-                    .victimProfile(report.getVictimProfile())
-                    .reportedBy(report.getReportedBy())
-                    .status(ScamReportEntity.ReportStatus.valueOf(report.getStatus().name()))
-                    .build();
+            // Convert to entity — no @Builder, use setters
+            ScamReportEntity entity = new ScamReportEntity();
+            entity.setReportId(report.getReportId());
+            entity.setSessionId(report.getSessionId());
+            entity.setTimestamp(report.getTimestamp().toString());
+            entity.setScamType(report.getScamType());
+            entity.setThreatLevel(report.getThreatLevel());
+            entity.setTotalMessages(report.getTotalMessages());
+            entity.setUpiIds(new ArrayList<>(report.getUpiIds()));
+            entity.setBankAccounts(new ArrayList<>(report.getBankAccounts()));
+            entity.setIfscCodes(new ArrayList<>(report.getIfscCodes()));
+            entity.setPhoneNumbers(new ArrayList<>(report.getPhoneNumbers()));
+            entity.setUrls(new ArrayList<>(report.getUrls()));
+            entity.setSuspiciousKeywords(new ArrayList<>(report.getSuspiciousKeywords()));
+            entity.setVictimProfile(report.getVictimProfile());
+            entity.setReportedBy(report.getReportedBy());
+            entity.setStatus(report.getStatus().name());
 
             // Convert conversation
             if (report.getConversation() != null) {
                 List<ScamReportEntity.ConversationTurn> turns = report.getConversation().stream()
-                        .map(turn -> ScamReportEntity.ConversationTurn.builder()
-                                .timestamp(turn.getTimestamp())
-                                .sender(turn.getSender())
-                                .message(turn.getMessage())
-                                .build())
+                        .map(turn -> {
+                            ScamReportEntity.ConversationTurn ct = new ScamReportEntity.ConversationTurn();
+                            ct.setTimestamp(turn.getTimestamp() != null ? turn.getTimestamp().toString() : null);
+                            ct.setSender(turn.getSender());
+                            ct.setMessage(turn.getMessage());
+                            return ct;
+                        })
                         .toList();
                 entity.setConversation(turns);
             }
 
             scamReportRepository.save(entity);
-            log.info("📦 Report {} archived to MongoDB", report.getReportId());
+            log.info("\uD83D\uDCE6 Report {} archived to DynamoDB", report.getReportId());
 
         } catch (Exception e) {
-            log.error("Failed to archive report to MongoDB {}: {}", report.getReportId(), e.getMessage());
+            log.error("Failed to archive report to DynamoDB {}: {}", report.getReportId(), e.getMessage());
         }
     }
 
     /**
-     * Get archived report (from MongoDB)
+     * Get archived report (from DynamoDB)
      */
     public ScamReport getReport(String reportId) {
         Optional<ScamReportEntity> entity = scamReportRepository.findByReportId(reportId);
@@ -295,7 +297,7 @@ public class GovernmentReportService {
     }
 
     /**
-     * Get all archived reports (from MongoDB)
+     * Get all archived reports (from DynamoDB)
      */
     public List<ScamReport> getAllReports() {
         return scamReportRepository.findAll().stream()
@@ -320,14 +322,14 @@ public class GovernmentReportService {
     }
 
     /**
-     * Convert MongoDB entity to ScamReport DTO
+     * Convert DynamoDB entity to ScamReport DTO
      */
     private ScamReport entityToScamReport(ScamReportEntity entity) {
         List<ScamReport.ConversationTurn> conversation = new ArrayList<>();
         if (entity.getConversation() != null) {
             conversation = entity.getConversation().stream()
                     .map(turn -> ScamReport.ConversationTurn.builder()
-                            .timestamp(turn.getTimestamp())
+                            .timestamp(turn.getTimestamp() != null ? LocalDateTime.parse(turn.getTimestamp()) : null)
                             .sender(turn.getSender())
                             .message(turn.getMessage())
                             .build())
@@ -337,7 +339,7 @@ public class GovernmentReportService {
         return ScamReport.builder()
                 .reportId(entity.getReportId())
                 .sessionId(entity.getSessionId())
-                .timestamp(entity.getTimestamp())
+                .timestamp(entity.getTimestamp() != null ? LocalDateTime.parse(entity.getTimestamp()) : null)
                 .scamType(entity.getScamType())
                 .threatLevel(entity.getThreatLevel())
                 .totalMessages(entity.getTotalMessages())
@@ -350,7 +352,7 @@ public class GovernmentReportService {
                 .conversation(conversation)
                 .victimProfile(entity.getVictimProfile())
                 .reportedBy(entity.getReportedBy())
-                .status(ScamReport.ReportStatus.valueOf(entity.getStatus().name()))
+                .status(ScamReport.ReportStatus.valueOf(entity.getStatus()))
                 .build();
     }
 
@@ -366,4 +368,3 @@ public class GovernmentReportService {
         }
     }
 }
-

@@ -4,7 +4,7 @@ import com.varutri.honeypot.dto.ApiResponse;
 import com.varutri.honeypot.dto.ChatRequest;
 import com.varutri.honeypot.dto.ChatResponse;
 import com.varutri.honeypot.dto.WhatsAppWebhook;
-import com.varutri.honeypot.service.llm.HuggingFaceService;
+import com.varutri.honeypot.service.llm.ChatLlmService;
 import com.varutri.honeypot.service.data.SessionStore;
 import com.varutri.honeypot.service.core.WhatsAppService;
 import com.varutri.honeypot.service.data.EvidenceCollector;
@@ -33,7 +33,7 @@ public class WhatsAppController {
     private WhatsAppService whatsAppService;
 
     @Autowired
-    private Optional<HuggingFaceService> huggingFaceService;
+    private Optional<ChatLlmService> chatLlmService;
 
     @Autowired
     private SessionStore sessionStore;
@@ -201,8 +201,8 @@ public class WhatsAppController {
             // Get AI response
             String aiResponse;
             // Determine active provider based on bean presence
-            if (huggingFaceService.isPresent()) {
-                aiResponse = huggingFaceService.get().generateResponse(messageText, request.getConversationHistory(),
+            if (chatLlmService.isPresent()) {
+                aiResponse = chatLlmService.get().generateResponse(messageText, request.getConversationHistory(),
                         "UNKNOWN", 0.0);
             } else {
                 return ChatResponse.external("System error: No AI provider available.");

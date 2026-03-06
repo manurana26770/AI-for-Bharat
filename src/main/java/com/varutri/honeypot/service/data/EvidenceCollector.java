@@ -23,9 +23,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Service for collecting and storing evidence from scam conversations
- * Uses MongoDB for persistent storage with in-memory cache
+ * Uses DynamoDB for persistent storage with in-memory cache
  * 
- * Now uses EnsembleThreatScorer for unified threat detection
+ * Uses EnsembleThreatScorer for unified threat detection
  */
 @Slf4j
 @Service
@@ -97,7 +97,7 @@ public class EvidenceCollector {
 
         evidence.setLastUpdated(LocalDateTime.now());
 
-        // Persist to MongoDB
+        // Persist to DynamoDB
         persistEvidence(sessionId, evidence);
 
         log.info("Evidence collected for session {}: Threat={} ({}), Confidence={}%, Layers={}/5",
@@ -120,12 +120,12 @@ public class EvidenceCollector {
             return cached;
         }
 
-        // Check MongoDB
+        // Check DynamoDB
         Optional<EvidenceEntity> existingEntity = evidenceRepository.findBySessionId(sessionId);
         if (existingEntity.isPresent()) {
             EvidencePackage evidence = entityToEvidencePackage(existingEntity.get());
             evidenceCache.put(sessionId, evidence);
-            log.debug("Loaded evidence from MongoDB: {}", sessionId);
+            log.debug("Loaded evidence from DynamoDB: {}", sessionId);
             return evidence;
         }
 
@@ -145,7 +145,7 @@ public class EvidenceCollector {
             return cached;
         }
 
-        // Check MongoDB
+        // Check DynamoDB
         Optional<EvidenceEntity> entity = evidenceRepository.findBySessionId(sessionId);
         if (entity.isPresent()) {
             EvidencePackage evidence = entityToEvidencePackage(entity.get());
@@ -157,7 +157,7 @@ public class EvidenceCollector {
     }
 
     /**
-     * Get all evidence packages (from MongoDB)
+     * Get all evidence packages (from DynamoDB)
      */
     public List<EvidencePackage> getAllEvidence() {
         return evidenceRepository.findAll().stream()
@@ -166,7 +166,7 @@ public class EvidenceCollector {
     }
 
     /**
-     * Get high-threat evidence packages (from MongoDB)
+     * Get high-threat evidence packages (from DynamoDB)
      */
     public List<EvidencePackage> getHighThreatEvidence() {
         return evidenceRepository.findByThreatLevelGreaterThanEqual(0.6).stream()
@@ -182,7 +182,7 @@ public class EvidenceCollector {
     }
 
     /**
-     * Persist evidence to MongoDB
+     * Persist evidence to DynamoDB
      */
     private void persistEvidence(String sessionId, EvidencePackage evidence) {
         try {
@@ -192,45 +192,47 @@ public class EvidenceCollector {
             // Update entity fields
             entity.setScamType(evidence.getScamType());
             entity.setThreatLevel(evidence.getThreatLevel());
-            entity.setLastUpdated(LocalDateTime.now());
+            entity.setLastUpdated(LocalDateTime.now().toString());
 
             // Convert conversation turns
-            List<EvidenceEntity.ConversationTurn> mongoTurns = evidence.getConversation().stream()
-                    .map(turn -> EvidenceEntity.ConversationTurn.builder()
-                            .timestamp(turn.getTimestamp())
-                            .userMessage(turn.getUserMessage())
-                            .assistantReply(turn.getAssistantReply())
-                            .build())
+            List<EvidenceEntity.ConversationTurn> dynamoTurns = evidence.getConversation().stream()
+                    .map(turn -> {
+                        EvidenceEntity.ConversationTurn ct = new EvidenceEntity.ConversationTurn();
+                        ct.setTimestamp(turn.getTimestamp() != null ? turn.getTimestamp().toString() : null);
+                        ct.setUserMessage(turn.getUserMessage());
+                        ct.setAssistantReply(turn.getAssistantReply());
+                        return ct;
+                    })
                     .toList();
-            entity.setConversation(mongoTurns);
+            entity.setConversation(dynamoTurns);
 
             // Convert extracted info
             ExtractedInfo info = evidence.getExtractedInfo();
-            EvidenceEntity.ExtractedIntelligence mongoInfo = EvidenceEntity.ExtractedIntelligence.builder()
-                    .upiIds(new ArrayList<>(info.getUpiIds()))
-                    .bankAccountNumbers(new ArrayList<>(info.getBankAccountNumbers()))
-                    .ifscCodes(new ArrayList<>(info.getIfscCodes()))
-                    .phoneNumbers(new ArrayList<>(info.getPhoneNumbers()))
-                    .urls(new ArrayList<>(info.getUrls()))
-                    .emails(new ArrayList<>(info.getEmails()))
-                    .suspiciousKeywords(new ArrayList<>(info.getSuspiciousKeywords()))
-                    .build();
-            entity.setExtractedInfo(mongoInfo);
+            EvidenceEntity.ExtractedIntelligence dynamoInfo = new EvidenceEntity.ExtractedIntelligence();
+            dynamoInfo.setUpiIds(new ArrayList<>(info.getUpiIds()));
+            dynamoInfo.setBankAccountNumbers(new ArrayList<>(info.getBankAccountNumbers()));
+            dynamoInfo.setIfscCodes(new ArrayList<>(info.getIfscCodes()));
+            dynamoInfo.setPhoneNumbers(new ArrayList<>(info.getPhoneNumbers()));
+            dynamoInfo.setUrls(new ArrayList<>(info.getUrls()));
+            dynamoInfo.setEmails(new ArrayList<>(info.getEmails()));
+            dynamoInfo.setSuspiciousKeywords(new ArrayList<>(info.getSuspiciousKeywords()));
+            entity.setExtractedInfo(dynamoInfo);
 
             evidenceRepository.save(entity);
-            log.debug("Persisted evidence to MongoDB: {}", sessionId);
+            log.debug("Persisted evidence to DynamoDB: {}", sessionId);
         } catch (Exception e) {
-            log.error("Failed to persist evidence to MongoDB {}: {}", sessionId, e.getMessage());
+            log.error("Failed to persist evidence to DynamoDB {}: {}", sessionId, e.getMessage());
         }
     }
 
     /**
-     * Convert MongoDB entity to EvidencePackage
+     * Convert DynamoDB entity to EvidencePackage
      */
     private EvidencePackage entityToEvidencePackage(EvidenceEntity entity) {
         EvidencePackage evidence = new EvidencePackage(entity.getSessionId());
-        evidence.setFirstContact(entity.getFirstContact());
-        evidence.setLastUpdated(entity.getLastUpdated());
+        evidence.setFirstContact(
+                entity.getFirstContact() != null ? LocalDateTime.parse(entity.getFirstContact()) : null);
+        evidence.setLastUpdated(entity.getLastUpdated() != null ? LocalDateTime.parse(entity.getLastUpdated()) : null);
         evidence.setScamType(entity.getScamType());
         evidence.setThreatLevel(entity.getThreatLevel());
 
@@ -239,7 +241,7 @@ public class EvidenceCollector {
             List<ConversationTurn> turns = entity.getConversation().stream()
                     .map(turn -> {
                         ConversationTurn ct = new ConversationTurn();
-                        ct.setTimestamp(turn.getTimestamp());
+                        ct.setTimestamp(turn.getTimestamp() != null ? LocalDateTime.parse(turn.getTimestamp()) : null);
                         ct.setUserMessage(turn.getUserMessage());
                         ct.setAssistantReply(turn.getAssistantReply());
                         return ct;
@@ -250,15 +252,15 @@ public class EvidenceCollector {
 
         // Convert extracted info
         if (entity.getExtractedInfo() != null) {
-            EvidenceEntity.ExtractedIntelligence mongoInfo = entity.getExtractedInfo();
+            EvidenceEntity.ExtractedIntelligence dynamoInfo = entity.getExtractedInfo();
             ExtractedInfo info = new ExtractedInfo();
-            info.setUpiIds(new ArrayList<>(mongoInfo.getUpiIds()));
-            info.setBankAccountNumbers(new ArrayList<>(mongoInfo.getBankAccountNumbers()));
-            info.setIfscCodes(new ArrayList<>(mongoInfo.getIfscCodes()));
-            info.setPhoneNumbers(new ArrayList<>(mongoInfo.getPhoneNumbers()));
-            info.setUrls(new ArrayList<>(mongoInfo.getUrls()));
-            info.setEmails(new ArrayList<>(mongoInfo.getEmails()));
-            info.setSuspiciousKeywords(new ArrayList<>(mongoInfo.getSuspiciousKeywords()));
+            info.setUpiIds(new ArrayList<>(dynamoInfo.getUpiIds()));
+            info.setBankAccountNumbers(new ArrayList<>(dynamoInfo.getBankAccountNumbers()));
+            info.setIfscCodes(new ArrayList<>(dynamoInfo.getIfscCodes()));
+            info.setPhoneNumbers(new ArrayList<>(dynamoInfo.getPhoneNumbers()));
+            info.setUrls(new ArrayList<>(dynamoInfo.getUrls()));
+            info.setEmails(new ArrayList<>(dynamoInfo.getEmails()));
+            info.setSuspiciousKeywords(new ArrayList<>(dynamoInfo.getSuspiciousKeywords()));
             evidence.setExtractedInfo(info);
         }
 

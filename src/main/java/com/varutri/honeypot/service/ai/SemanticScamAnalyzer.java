@@ -1,20 +1,15 @@
 package com.varutri.honeypot.service.ai;
 
-import com.varutri.honeypot.service.llm.HuggingFaceService;
+import com.varutri.honeypot.service.llm.ChatLlmService;
 import com.varutri.honeypot.service.ml.LocalMLService;
 
 import com.varutri.honeypot.dto.ChatRequest;
-import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
 
 import jakarta.annotation.PostConstruct;
-import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -27,20 +22,21 @@ import java.util.concurrent.Executors;
  * 1. Sentence Embeddings using local MiniLM (via DJL)
  * 2. Semantic Similarity to known scam patterns
  * 3. Intent Detection using local DeBERTa (via DJL)
- * 4. LLM-based Contextual Analysis (via HF Chat API)
+ * 4. LLM-based Contextual Analysis (via ChatLlmService — Bedrock or HF)
  * 5. Manipulation Tactics Detection using local DeBERTa
  * 6. Multi-turn Conversation Context Understanding
  *
  * Embeddings and classification run locally — no external inference API calls.
- * Only the LLM contextual analysis uses the HF Chat Completions API.
+ * Only the LLM contextual analysis uses the ChatLlmService abstraction.
  */
 @Slf4j
 @Service
 public class SemanticScamAnalyzer {
 
     private final LocalMLService localMLService;
-    private final WebClient chatWebClient;
-    private final String llmModel;
+
+    @Autowired(required = false)
+    private ChatLlmService chatLlmService;
 
     // Thread pool for parallel ML tasks
     private final ExecutorService executorService = Executors.newCachedThreadPool();
@@ -110,26 +106,19 @@ public class SemanticScamAnalyzer {
             "trust building with personal details");
 
     @Autowired
-    public SemanticScamAnalyzer(
-            LocalMLService localMLService,
-            @Value("${huggingface.api-key}") String apiKey,
-            @Value("${huggingface.model:meta-llama/Llama-3.3-70B-Instruct}") String llmModel) {
-
+    public SemanticScamAnalyzer(LocalMLService localMLService) {
         this.localMLService = localMLService;
-        this.llmModel = llmModel;
-
-        this.chatWebClient = WebClient.builder()
-                .baseUrl("https://router.huggingface.co/v1")
-                .defaultHeader("Authorization", "Bearer " + apiKey)
-                .defaultHeader("Content-Type", "application/json")
-                .build();
-
         log.info("SemanticScamAnalyzer initialized with LOCAL ML models (MiniLM + DeBERTa)");
     }
 
     @PostConstruct
     public void initialize() {
         log.info("Pre-computing embeddings for {} scam pattern categories...", SCAM_PATTERNS.size());
+        if (chatLlmService != null) {
+            log.info("ChatLlmService available for contextual analysis");
+        } else {
+            log.warn("ChatLlmService not available — contextual analysis will be skipped");
+        }
     }
 
     // ========================================================================
@@ -345,11 +334,16 @@ public class SemanticScamAnalyzer {
     }
 
     // ========================================================================
-    // CONTEXTUAL ANALYSIS (ASYNC)
+    // CONTEXTUAL ANALYSIS (ASYNC) — via ChatLlmService abstraction
     // ========================================================================
 
     private CompletableFuture<ContextualAnalysis> analyzeConversationContext(String currentMessage,
             List<ChatRequest.ConversationMessage> history) {
+
+        if (chatLlmService == null) {
+            log.debug("No ChatLlmService available — skipping contextual analysis");
+            return CompletableFuture.completedFuture(new ContextualAnalysis());
+        }
 
         StringBuilder conversationContext = new StringBuilder();
         if (history != null) {
@@ -360,40 +354,18 @@ public class SemanticScamAnalyzer {
         }
         conversationContext.append("user: ").append(currentMessage);
 
-        String prompt = buildAnalysisPrompt(conversationContext.toString());
-
-        List<HuggingFaceService.Message> messages = new ArrayList<>();
-        HuggingFaceService.Message systemMsg = new HuggingFaceService.Message();
-        systemMsg.setRole("system");
-        systemMsg.setContent("You are a scam detection expert. Analyze conversations for fraud patterns. " +
+        String systemPrompt = "You are a scam detection expert. Analyze conversations for fraud patterns. " +
                 "Respond ONLY in JSON format with these fields: " +
                 "isScam (boolean), scamType (string), confidence (0.0-1.0), " +
                 "evidence (list of suspicious phrases), tactics (list of manipulation tactics used), " +
-                "escalationPattern (string describing how the scam is progressing)");
-        messages.add(systemMsg);
+                "escalationPattern (string describing how the scam is progressing)";
 
-        HuggingFaceService.Message userMsg = new HuggingFaceService.Message();
-        userMsg.setRole("user");
-        userMsg.setContent(prompt);
-        messages.add(userMsg);
+        String userPrompt = buildAnalysisPrompt(conversationContext.toString());
 
-        HuggingFaceService.ChatCompletionRequest request = new HuggingFaceService.ChatCompletionRequest();
-        request.setModel(llmModel);
-        request.setMessages(messages);
-        request.setMaxTokens(500);
-        request.setTemperature(0.3);
-
-        return chatWebClient.post()
-                .uri("/chat/completions")
-                .bodyValue(request)
-                .retrieve()
-                .bodyToMono(HuggingFaceService.ChatCompletionResponse.class)
-                .timeout(Duration.ofSeconds(30))
-                .toFuture()
-                .thenApply(response -> {
+        return chatLlmService.analyzeContextAsync(systemPrompt, userPrompt)
+                .thenApply(llmResponse -> {
                     ContextualAnalysis analysis = new ContextualAnalysis();
-                    if (response != null && response.getChoices() != null && !response.getChoices().isEmpty()) {
-                        String llmResponse = response.getChoices().get(0).getMessage().getContent();
+                    if (llmResponse != null && !llmResponse.isBlank()) {
                         analysis = parseContextualAnalysis(llmResponse);
                         analysis.conversationTurns = (history != null ? history.size() : 0) + 1;
                     }
@@ -498,7 +470,7 @@ public class SemanticScamAnalyzer {
     }
 
     // ========================================================================
-    // DTOs (HF-specific DTOs removed — local ML handles formats internally)
+    // DTOs
     // ========================================================================
 
     @Data

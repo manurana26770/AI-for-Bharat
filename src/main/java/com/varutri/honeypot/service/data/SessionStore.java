@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Session storage for tracking conversations
- * Now uses MongoDB for persistent storage with in-memory cache for performance
+ * Uses DynamoDB for persistent storage with in-memory cache for performance
  */
 @Slf4j
 @Service
@@ -26,7 +26,7 @@ public class SessionStore {
 
     private final SessionRepository sessionRepository;
 
-    // In-memory cache for fast access (write-through to MongoDB)
+    // In-memory cache for fast access (write-through to DynamoDB)
     private final ConcurrentHashMap<String, SessionData> sessionCache = new ConcurrentHashMap<>();
 
     /**
@@ -39,24 +39,23 @@ public class SessionStore {
             return cached;
         }
 
-        // Check MongoDB
+        // Check DynamoDB
         Optional<SessionEntity> existingEntity = sessionRepository.findBySessionId(sessionId);
         if (existingEntity.isPresent()) {
             SessionData sessionData = entityToSessionData(existingEntity.get());
             sessionCache.put(sessionId, sessionData);
-            log.debug("Loaded session from MongoDB: {}", sessionId);
+            log.debug("Loaded session from DynamoDB: {}", sessionId);
             return sessionData;
         }
 
         // Create new session
         log.info("Creating new session: {}", sessionId);
-        SessionEntity newEntity = SessionEntity.builder()
-                .sessionId(sessionId)
-                .conversationHistory(new ArrayList<>())
-                .turnCount(0)
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .build();
+        SessionEntity newEntity = new SessionEntity();
+        newEntity.setSessionId(sessionId);
+        newEntity.setConversationHistory(new ArrayList<>());
+        newEntity.setTurnCount(0);
+        newEntity.setCreatedAt(LocalDateTime.now().toString());
+        newEntity.setUpdatedAt(LocalDateTime.now().toString());
         sessionRepository.save(newEntity);
 
         SessionData newSession = new SessionData(sessionId);
@@ -71,7 +70,7 @@ public class SessionStore {
         SessionData session = getOrCreateSession(sessionId);
         session.addMessage(role, content);
 
-        // Persist to MongoDB
+        // Persist to DynamoDB
         persistSession(sessionId, session);
 
         log.debug("Added message to session {}: {} - {}", sessionId, role, content);
@@ -93,10 +92,7 @@ public class SessionStore {
 
     /**
      * Check if session should trigger final callback
-     */
-    /**
-     * Check if session should trigger final callback
-     * Uses Dynamic Termination Strategy (Satuation Logic)
+     * Uses Dynamic Termination Strategy (Saturation Logic)
      */
     public boolean shouldTriggerCallback(String sessionId, int maxTurns, boolean isHighThreat,
             boolean hasCriticalEvidence) {
@@ -110,7 +106,6 @@ public class SessionStore {
         }
 
         // 2. Intelligence Saturation (The "Stale" Check)
-        // If we have high threat + critical evidence + no new info for 5 turns -> STOP
         if (isHighThreat && hasCriticalEvidence && session.getConsecutiveTurnsWithoutIntel() >= 5) {
             log.info("Session {} saturated: High threat, critical evidence found, and 5 turns without new info",
                     sessionId);
@@ -135,12 +130,12 @@ public class SessionStore {
     }
 
     /**
-     * Clear session data (from both cache and MongoDB)
+     * Clear session data (from both cache and DynamoDB)
      */
     public void clearSession(String sessionId) {
         sessionCache.remove(sessionId);
         sessionRepository.deleteBySessionId(sessionId);
-        log.info("Cleared session from cache and MongoDB: {}", sessionId);
+        log.info("Cleared session from cache and DynamoDB: {}", sessionId);
     }
 
     /**
@@ -153,41 +148,45 @@ public class SessionStore {
     }
 
     /**
-     * Persist session to MongoDB
+     * Persist session to DynamoDB
      */
     private void persistSession(String sessionId, SessionData sessionData) {
         try {
             SessionEntity entity = sessionRepository.findBySessionId(sessionId)
-                    .orElse(SessionEntity.builder()
-                            .sessionId(sessionId)
-                            .createdAt(LocalDateTime.now())
-                            .build());
+                    .orElseGet(() -> {
+                        SessionEntity newEntity = new SessionEntity();
+                        newEntity.setSessionId(sessionId);
+                        newEntity.setCreatedAt(LocalDateTime.now().toString());
+                        return newEntity;
+                    });
 
             // Convert conversation history
-            List<SessionEntity.ConversationMessage> mongoHistory = sessionData.getConversationHistory().stream()
-                    .map(msg -> SessionEntity.ConversationMessage.builder()
-                            .sender(msg.getSender())
-                            .text(msg.getText())
-                            .timestamp(msg.getTimestamp())
-                            .build())
+            List<SessionEntity.ConversationMessage> dynamoHistory = sessionData.getConversationHistory().stream()
+                    .map(msg -> {
+                        SessionEntity.ConversationMessage cm = new SessionEntity.ConversationMessage();
+                        cm.setSender(msg.getSender());
+                        cm.setText(msg.getText());
+                        cm.setTimestamp(msg.getTimestamp());
+                        return cm;
+                    })
                     .toList();
 
-            entity.setConversationHistory(mongoHistory);
+            entity.setConversationHistory(dynamoHistory);
             entity.setTurnCount(sessionData.getTurnCount());
             entity.setLastIntelligenceTurn(sessionData.getLastIntelligenceTurn());
             entity.setConsecutiveTurnsWithoutIntel(sessionData.getConsecutiveTurnsWithoutIntel());
-            entity.setUpdatedAt(LocalDateTime.now());
+            entity.setUpdatedAt(LocalDateTime.now().toString());
 
             sessionRepository.save(entity);
-            log.debug("Persisted session to MongoDB: {}", sessionId);
+            log.debug("Persisted session to DynamoDB: {}", sessionId);
         } catch (Exception e) {
-            log.error("Failed to persist session to MongoDB {}: {}", sessionId, e.getMessage());
+            log.error("Failed to persist session to DynamoDB {}: {}", sessionId, e.getMessage());
             // Don't throw - we still have in-memory cache as fallback
         }
     }
 
     /**
-     * Convert MongoDB entity to SessionData
+     * Convert DynamoDB entity to SessionData
      */
     private SessionData entityToSessionData(SessionEntity entity) {
         SessionData sessionData = new SessionData(entity.getSessionId());
@@ -209,7 +208,7 @@ public class SessionStore {
     }
 
     /**
-     * Get total session count (from MongoDB)
+     * Get total session count (from DynamoDB)
      */
     public long getTotalSessionCount() {
         return sessionRepository.count();
