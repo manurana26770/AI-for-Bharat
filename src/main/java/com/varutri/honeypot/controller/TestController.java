@@ -15,6 +15,7 @@ import java.util.List;
 /**
  * Controller for testing and simulation endpoints
  */
+@io.swagger.v3.oas.annotations.Hidden
 @Slf4j
 @RestController
 @RequestMapping("/api/test")

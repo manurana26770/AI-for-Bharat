@@ -1,5 +1,6 @@
 package com.varutri.honeypot.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -8,22 +9,24 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * DTO for government scam report
- */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "Scam intelligence report — compiled evidence for government authorities")
 public class ScamReport {
 
+    @Schema(description = "Unique report identifier", example = "RPT-20240307-abc123")
     private String reportId;
     private LocalDateTime timestamp;
+    @Schema(description = "Session ID this report belongs to", example = "session-001")
     private String sessionId;
 
-    // Scam details
+    @Schema(description = "Detected scam type", example = "FINANCIAL_FRAUD")
     private String scamType;
+    @Schema(description = "Threat level (0.0 to 1.0)", example = "0.85")
     private double threatLevel;
+    @Schema(description = "Total messages exchanged in session", example = "12")
     private int totalMessages;
 
     // Extracted intelligence

@@ -1,5 +1,6 @@
 package com.varutri.honeypot.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -7,22 +8,26 @@ import lombok.NoArgsConstructor;
 
 import java.util.List;
 
-/**
- * PersonaProfile represents the identity of the honeypot AI persona.
- * This profile is used to dynamically generate system prompts for the LLM.
- */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "Honeypot AI persona profile — defines identity, traits, and language style")
 public class PersonaProfile {
 
+    @Schema(description = "Persona's full name", example = "Amit Sharma")
     private String name;
+    @Schema(description = "Persona's age", example = "35")
     private int age;
+    @Schema(description = "Profession / occupation", example = "Junior Accountant")
     private String profession;
+    @Schema(description = "City of residence", example = "Pune")
     private String city;
+    @Schema(description = "Country of residence", example = "India")
     private String country;
+    @Schema(description = "Living situation context for the LLM", example = "You are eager for financial opportunities and easy money.")
     private String livingStatus;
+    @Schema(description = "Technology comfort level", example = "You are competent with digital payments.")
     private String techLevel;
 
     private List<String> personalityTraits;

@@ -17,6 +17,13 @@ import com.varutri.honeypot.dto.ExtractedInfo;
 import com.varutri.honeypot.dto.ThreatAssessmentResponse;
 import com.varutri.honeypot.exception.ResourceNotFoundException;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +43,7 @@ import java.util.Optional;
 @Slf4j
 @RestController
 @RequestMapping("/api")
+@Tag(name = "Honeypot Chat", description = "Core honeypot chat endpoints — engage scammers, assess threats, collect evidence, and trigger callbacks")
 public class HoneypotController {
 
     @Autowired
@@ -68,14 +76,44 @@ public class HoneypotController {
     @Value("${llm.provider:huggingface}")
     private String llmProvider;
 
-    /**
-     * Main chat endpoint (Asynchronous)
-     * POST /api/chat
-     * 
-     * @return 200 OK with chat response on success
-     * @return 400 Bad Request on validation errors
-     * @return 503 Service Unavailable if LLM fails
-     */
+    @Operation(
+            summary = "Chat with a scammer",
+            description = """
+                    Main honeypot chat endpoint. Send a scammer's message and receive an AI-generated persona response.
+
+                    **Pipeline:**
+                    1. Input sanitization & prompt-injection detection
+                    2. Parallel: Information extraction (UPI, bank accounts, phones, URLs) + 5-layer ensemble threat scoring
+                    3. AI response generation via configured LLM (HuggingFace / AWS Bedrock)
+                    4. Evidence collection & session tracking
+                    5. Auto-callback when max turns reached or critical evidence found
+                    """
+    )
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "Chat message from the scammer",
+            required = true,
+            content = @Content(schema = @Schema(implementation = ChatRequest.class),
+                    examples = @ExampleObject(name = "Bank Refund Scam", value = """
+                            {
+                              "sessionId": "session-001",
+                              "message": {
+                                "sender": "scammer",
+                                "text": "Hello sir, your bank refund of Rs 5000 is pending. Please share your UPI ID to process.",
+                                "timestamp": 1709827200000
+                              },
+                              "conversationHistory": [],
+                              "metadata": {
+                                "channel": "whatsapp",
+                                "language": "en"
+                              }
+                            }
+                            """))
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "AI persona reply generated successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request body"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "LLM service unavailable")
+    })
     @PostMapping("/chat")
     public java.util.concurrent.CompletableFuture<ResponseEntity<Map<String, String>>> chat(
             @Valid @RequestBody ChatRequest request) {
@@ -211,12 +249,11 @@ public class HoneypotController {
         }
     }
 
-    /**
-     * Health check endpoint
-     * GET /api/health
-     * 
-     * @return 200 OK with health status
-     */
+    @Operation(
+            summary = "Health check",
+            description = "Returns the health status of the honeypot service, including the active LLM provider and its availability."
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Service is healthy")
     @GetMapping("/health")
     public ResponseEntity<ApiResponse<Map<String, Object>>> health() {
         Map<String, Object> healthData = Map.of(
@@ -228,13 +265,34 @@ public class HoneypotController {
         return ApiResponse.ok(healthData, "Service is healthy");
     }
 
-    /**
-     * Comprehensive threat assessment endpoint
-     * POST /api/assess
-     * 
-     * @return 200 OK with threat assessment
-     * @return 400 Bad Request on validation errors
-     */
+    @Operation(
+            summary = "Assess threat level of a message",
+            description = """
+                    Runs a comprehensive 5-layer ensemble threat analysis on the provided message.
+
+                    **Layers:** Keyword matching, Regex patterns, ML phishing detection, Semantic analysis, Contextual scoring.
+                    Returns threat level (SAFE/LOW/MEDIUM/HIGH/CRITICAL), confidence %, scam type, and per-layer breakdown.
+                    """
+    )
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "Message to assess",
+            content = @Content(schema = @Schema(implementation = ChatRequest.class),
+                    examples = @ExampleObject(name = "Suspicious message", value = """
+                            {
+                              "sessionId": "assess-001",
+                              "message": {
+                                "sender": "scammer",
+                                "text": "Congratulations! You won Rs 25 lakh lottery. Send Rs 5000 processing fee to UPI invest@oksbi",
+                                "timestamp": 1709827200000
+                              },
+                              "conversationHistory": []
+                            }
+                            """))
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Threat assessment completed"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request")
+    })
     @PostMapping("/assess")
     public ResponseEntity<ApiResponse<ThreatAssessmentResponse>> assessThreat(
             @Valid @RequestBody ChatRequest request) {
@@ -267,15 +325,18 @@ public class HoneypotController {
         }
     }
 
-    /**
-     * Manually trigger callback for a session
-     * POST /api/callback/{sessionId}
-     * 
-     * @return 200 OK on success
-     * @return 404 Not Found if session doesn't exist
-     */
+    @Operation(
+            summary = "Trigger callback for a session",
+            description = "Manually trigger the final callback report for a given session. Sends extracted intelligence to the hackathon platform."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Callback sent successfully"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found")
+    })
     @PostMapping("/callback/{sessionId}")
-    public ResponseEntity<ApiResponse<Map<String, String>>> triggerCallback(@PathVariable String sessionId) {
+    public ResponseEntity<ApiResponse<Map<String, String>>> triggerCallback(
+            @Parameter(description = "Session ID to trigger callback for", example = "session-001")
+            @PathVariable String sessionId) {
         log.info("Manual callback triggered for session: {}", sessionId);
 
         EvidenceCollector.EvidencePackage evidence = evidenceCollector.getEvidence(sessionId);
@@ -292,15 +353,17 @@ public class HoneypotController {
         return ApiResponse.ok(result, "Callback sent successfully");
     }
 
-    /**
-     * Get evidence for a specific session
-     * GET /api/evidence/{sessionId}
-     * 
-     * @return 200 OK with evidence
-     * @return 404 Not Found if no evidence exists
-     */
+    @Operation(
+            summary = "Get evidence for a session",
+            description = "Retrieve the full evidence package for a specific session, including extracted UPI IDs, bank accounts, phone numbers, URLs, and conversation log."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Evidence retrieved"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "No evidence found for session")
+    })
     @GetMapping("/evidence/{sessionId}")
     public ResponseEntity<ApiResponse<EvidenceCollector.EvidencePackage>> getEvidence(
+            @Parameter(description = "Session ID", example = "session-001")
             @PathVariable String sessionId) {
         log.info("Evidence requested for session: {}", sessionId);
 
@@ -313,12 +376,11 @@ public class HoneypotController {
         return ApiResponse.ok(evidence, "Evidence retrieved successfully");
     }
 
-    /**
-     * Get all high-threat evidence packages
-     * GET /api/evidence/high-threat
-     * 
-     * @return 200 OK with list of high-threat evidence
-     */
+    @Operation(
+            summary = "Get high-threat evidence",
+            description = "Retrieve all evidence packages that have been classified as high threat (threat level >= 0.6)."
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "High-threat evidence list retrieved")
     @GetMapping("/evidence/high-threat")
     public ResponseEntity<ApiResponse<List<EvidenceCollector.EvidencePackage>>> getHighThreatEvidence() {
         log.info("High-threat evidence requested");
@@ -328,12 +390,11 @@ public class HoneypotController {
                 String.format("Retrieved %d high-threat evidence package(s)", evidence.size()));
     }
 
-    /**
-     * Get all evidence packages
-     * GET /api/evidence
-     * 
-     * @return 200 OK with list of all evidence
-     */
+    @Operation(
+            summary = "Get all evidence",
+            description = "Retrieve all collected evidence packages across all sessions."
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "All evidence retrieved")
     @GetMapping("/evidence")
     public ResponseEntity<ApiResponse<List<EvidenceCollector.EvidencePackage>>> getAllEvidence() {
         log.info("All evidence requested");

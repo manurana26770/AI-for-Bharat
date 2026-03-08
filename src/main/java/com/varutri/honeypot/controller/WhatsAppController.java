@@ -24,6 +24,7 @@ import java.util.Optional;
  * Controller for WhatsApp webhook integration.
  * Returns standardized ApiResponse objects with proper HTTP status codes.
  */
+@io.swagger.v3.oas.annotations.Hidden
 @Slf4j
 @RestController
 @RequestMapping("/api/whatsapp")

@@ -2,6 +2,12 @@ package com.varutri.honeypot.controller;
 
 import com.varutri.honeypot.dto.ScamReport;
 import com.varutri.honeypot.service.core.GovernmentReportService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -16,14 +22,30 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/api/report")
+@Tag(name = "Reports", description = "Scam intelligence reports — generate, retrieve, and analyze reports sent to government authorities")
 public class ReportController {
 
     @Autowired
     private GovernmentReportService governmentReportService;
 
-    /**
-     * Manually trigger government report for a session
-     */
+    @Operation(
+            summary = "Generate and send a manual report",
+            description = """
+                    Manually generate a government scam report for a specific session.
+                    Compiles all extracted intelligence (UPI IDs, bank accounts, phone numbers, phishing URLs)
+                    and sends it to cyber-crime authorities.
+                    """
+    )
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "Session ID to report",
+            content = @Content(examples = @ExampleObject(value = """
+                    {
+                      "sessionId": "session-001"
+                    }
+                    """))
+    )
+    @ApiResponse(responseCode = "200", description = "Report generated and sent")
+    @ApiResponse(responseCode = "400", description = "Session ID missing or no evidence found")
     @PostMapping("/manual")
     public ResponseEntity<?> manualReport(@RequestBody Map<String, String> request) {
         String sessionId = request.get("sessionId");
@@ -66,11 +88,16 @@ public class ReportController {
         }
     }
 
-    /**
-     * Get report by ID
-     */
+    @Operation(
+            summary = "Get report by ID",
+            description = "Retrieve a specific scam report by its unique report ID."
+    )
+    @ApiResponse(responseCode = "200", description = "Report found")
+    @ApiResponse(responseCode = "404", description = "Report not found")
     @GetMapping("/{reportId}")
-    public ResponseEntity<?> getReport(@PathVariable String reportId) {
+    public ResponseEntity<?> getReport(
+            @Parameter(description = "Report ID", example = "RPT-20240307-abc123")
+            @PathVariable String reportId) {
         ScamReport report = governmentReportService.getReport(reportId);
 
         if (report == null) {
@@ -80,18 +107,22 @@ public class ReportController {
         return ResponseEntity.ok(report);
     }
 
-    /**
-     * Get all archived reports
-     */
+    @Operation(
+            summary = "Get all reports",
+            description = "Retrieve all archived scam reports."
+    )
+    @ApiResponse(responseCode = "200", description = "All reports returned")
     @GetMapping("/all")
     public ResponseEntity<List<ScamReport>> getAllReports() {
         List<ScamReport> reports = governmentReportService.getAllReports();
         return ResponseEntity.ok(reports);
     }
 
-    /**
-     * Get report statistics
-     */
+    @Operation(
+            summary = "Get report statistics",
+            description = "Returns aggregate statistics across all reports: total count, high-threat count, and total extracted intelligence (UPI IDs, bank accounts, phone numbers, phishing URLs)."
+    )
+    @ApiResponse(responseCode = "200", description = "Statistics returned")
     @GetMapping("/stats")
     public ResponseEntity<?> getStats() {
         List<ScamReport> reports = governmentReportService.getAllReports();

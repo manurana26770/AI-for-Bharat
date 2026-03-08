@@ -2,6 +2,13 @@ package com.varutri.honeypot.controller;
 
 import com.varutri.honeypot.dto.PersonaProfile;
 import com.varutri.honeypot.service.llm.PersonaService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -19,15 +26,17 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequestMapping("/api/persona")
+@Tag(name = "Persona Management", description = "Manage honeypot AI personas at runtime — switch identities, apply presets, and customize persona behavior without redeployment")
 public class PersonaController {
 
     @Autowired
     private PersonaService personaService;
 
-    /**
-     * Get current persona details
-     * GET /api/persona
-     */
+    @Operation(
+            summary = "Get current persona",
+            description = "Returns the full profile of the currently active honeypot persona, including name, age, profession, personality traits, language style, and example phrases."
+    )
+    @ApiResponse(responseCode = "200", description = "Current persona profile")
     @GetMapping
     public ResponseEntity<Map<String, Object>> getCurrentPersona() {
         PersonaProfile persona = personaService.getCurrentPersona();
@@ -49,10 +58,11 @@ public class PersonaController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Get the generated system prompt for the current persona
-     * GET /api/persona/prompt
-     */
+    @Operation(
+            summary = "Get generated system prompt",
+            description = "Returns the LLM system prompt generated from the current persona profile. Useful for debugging persona behavior."
+    )
+    @ApiResponse(responseCode = "200", description = "System prompt returned")
     @GetMapping("/prompt")
     public ResponseEntity<Map<String, String>> getCurrentPrompt() {
         Map<String, String> response = new HashMap<>();
@@ -61,10 +71,30 @@ public class PersonaController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Update persona with new profile
-     * PUT /api/persona
-     */
+    @Operation(
+            summary = "Update persona",
+            description = "Replace the current persona with a fully custom profile. All fields are optional — unset fields retain defaults."
+    )
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "New persona profile",
+            content = @Content(schema = @Schema(implementation = PersonaProfile.class),
+                    examples = @ExampleObject(name = "Custom Persona", value = """
+                            {
+                              "name": "Priya Patel",
+                              "age": 28,
+                              "profession": "Software Engineer",
+                              "city": "Bangalore",
+                              "country": "India",
+                              "livingStatus": "You live alone in a PG accommodation and manage your finances independently.",
+                              "techLevel": "You are tech-savvy and comfortable with UPI, net banking, and crypto.",
+                              "personalityTraits": ["Curious", "Skeptical", "Direct"],
+                              "languageStyle": ["Uses tech jargon", "Asks pointed questions", "Casual tone"],
+                              "examplePhrases": ["Can you send me the payment link?", "What's the exact UPI ID?"],
+                              "commonMistakes": []
+                            }
+                            """))
+    )
+    @ApiResponse(responseCode = "200", description = "Persona updated successfully")
     @PutMapping
     public ResponseEntity<Map<String, Object>> updatePersona(@RequestBody PersonaProfile newPersona) {
         String oldSummary = personaService.getPersonaSummary();
@@ -83,10 +113,11 @@ public class PersonaController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Reset to default persona (Rajesh Kumar)
-     * POST /api/persona/reset
-     */
+    @Operation(
+            summary = "Reset persona to default",
+            description = "Resets the persona back to the default profile (Amit Sharma, 35-year-old Junior Accountant from Pune)."
+    )
+    @ApiResponse(responseCode = "200", description = "Persona reset to default")
     @PostMapping("/reset")
     public ResponseEntity<Map<String, Object>> resetPersona() {
         String oldSummary = personaService.getPersonaSummary();
@@ -104,10 +135,17 @@ public class PersonaController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Get list of available preset personas
-     * GET /api/persona/presets
-     */
+    @Operation(
+            summary = "List preset personas",
+            description = """
+                    Returns all available preset personas. Each preset is a ready-to-use persona profile targeting different demographics:
+                    - `elderly-indian-male` — Amit Sharma (default)
+                    - `elderly-indian-female` — Kamala Devi (Chennai)
+                    - `young-american-student` — Mike Johnson (Austin)
+                    - `elderly-british` — Margaret Thompson (London)
+                    """
+    )
+    @ApiResponse(responseCode = "200", description = "Preset personas returned")
     @GetMapping("/presets")
     public ResponseEntity<Map<String, PersonaProfile>> getPresets() {
         Map<String, PersonaProfile> presets = new LinkedHashMap<>();
@@ -206,12 +244,16 @@ public class PersonaController {
         return ResponseEntity.ok(presets);
     }
 
-    /**
-     * Apply a preset persona by name
-     * POST /api/persona/presets/{presetName}
-     */
+    @Operation(
+            summary = "Apply a preset persona",
+            description = "Switch to a preset persona by name. Available presets: `elderly-indian-male`, `elderly-indian-female`, `young-american-student`, `elderly-british`."
+    )
+    @ApiResponse(responseCode = "200", description = "Preset applied")
+    @ApiResponse(responseCode = "404", description = "Preset not found")
     @PostMapping("/presets/{presetName}")
-    public ResponseEntity<Map<String, Object>> applyPreset(@PathVariable String presetName) {
+    public ResponseEntity<Map<String, Object>> applyPreset(
+            @Parameter(description = "Name of the preset persona", example = "elderly-indian-female")
+            @PathVariable String presetName) {
         Map<String, PersonaProfile> presets = getPresets().getBody();
 
         if (presets == null || !presets.containsKey(presetName)) {

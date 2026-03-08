@@ -34,9 +34,13 @@ public class ApiKeyFilter extends OncePerRequestFilter {
 
         String requestApiKey = request.getHeader(API_KEY_HEADER);
 
-        // Allow health check endpoint without API key
-        if (request.getRequestURI().contains("/actuator") ||
-                request.getRequestURI().contains("/health")) {
+        // Allow health check and Swagger UI endpoints without API key
+        String uri = request.getRequestURI();
+        if (uri.contains("/actuator") ||
+                uri.contains("/health") ||
+                uri.contains("/swagger-ui") ||
+                uri.contains("/api-docs") ||
+                uri.contains("/v3/api-docs")) {
             filterChain.doFilter(request, response);
             return;
         }

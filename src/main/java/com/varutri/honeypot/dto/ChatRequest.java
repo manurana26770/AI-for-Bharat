@@ -1,6 +1,7 @@
 package com.varutri.honeypot.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
@@ -16,6 +17,7 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "Chat request payload — send a scammer message to the honeypot")
 public class ChatRequest {
 
     /**
@@ -26,6 +28,7 @@ public class ChatRequest {
     @Size(min = 1, max = 100, message = "Session ID must be between 1 and 100 characters")
     @Pattern(regexp = "^[a-zA-Z0-9_-]+$", message = "Session ID can only contain letters, numbers, underscores, and dashes")
     @JsonProperty("sessionId")
+    @Schema(description = "Unique session identifier for tracking the conversation", example = "session-001")
     private String sessionId;
 
     /**
