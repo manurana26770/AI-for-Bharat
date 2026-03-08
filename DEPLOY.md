@@ -86,9 +86,11 @@ docker-compose logs -f app
 ## Step 4: Verify Deployment
 
 Open these URLs:
-- Health: `http://<YOUR_EC2_PUBLIC_IP>:8080/api/health`
+- Health: `http://<YOUR_EC2_PUBLIC_IP>:8080/api/health`  (used by Docker healthcheck)
 - Swagger UI: `http://<YOUR_EC2_PUBLIC_IP>:8080/swagger-ui.html`
 - OpenAPI JSON: `http://<YOUR_EC2_PUBLIC_IP>:8080/api-docs`
+
+> After startup, `docker-compose ps` should show the `app` container as **healthy** once the endpoint responds.
 
 Test chat API:
 ```bash
