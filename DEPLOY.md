@@ -1,120 +1,133 @@
-# Deployment Guide for AWS (Free Tier)
+# Deployment Guide for AWS EC2
 
-This guide will help you deploy the Varutri Honeypot application using **AWS EC2 (Free Tier)**.
+This guide deploys the current Varutri Honeypot application to an already-launched Ubuntu EC2 instance using Docker Compose.
 
 ## Prerequisites
-- An [AWS Account](https://aws.amazon.com/) (eligible for Free Tier).
-- A [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) account (Free Cluster).
-    - *Note: We recommend using MongoDB Atlas instead of running MongoDB on the EC2 instance because the free tier EC2 instance (t2.micro) has limited RAM (1GB).*
-- [Git](https://git-scm.com/) installed locally.
+- AWS account and running EC2 instance.
+- EC2 key pair `.pem` file.
+- Security Group inbound rules:
+  - `SSH` (22) from `My IP` or `0.0.0.0/0`
+  - `Custom TCP` (8080) from `0.0.0.0/0` (API access)
+- Required secrets for `.env`:
+  - `VARUTRI_API_KEY`
+  - `HUGGINGFACE_API_KEY`
+  - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`
+  - WhatsApp keys only if WhatsApp flow is used
 
 ---
 
-## Step 1: Launch an AWS EC2 Instance
+## Step 3: Deploy on Your Existing EC2
 
-1.  **Log in to AWS Console** and navigate to **EC2**.
-2.  Click **Launch Instance**.
-3.  **Name**: `Varutri-Honeypot`.
-4.  **AMI (OS)**: Select **Ubuntu** (Ubuntu Server 24.04 LTS or 22.04 LTS).
-5.  **Instance Type**: Select **t2.micro** (or `t3.micro` if eligible). This is free tier eligible.
-6.  **Key Pair**: Create a new key pair (e.g., `honeypot-key`). **Download the .pem file** and keep it safe.
-7.  **Network Settings**:
-    - Check **Allow SSH traffic from**. Select "My IP" for security, or "Anywhere" if you need to access from multiple places.
-    - Check **Allow HTTP traffic from the internet**.
-    - Check **Allow HTTPS traffic from the internet**.
-8.  **Configure Storage**: The default 8GB gp2/gp3 is fine.
-9.  Click **Launch Instance**.
+1. Connect to the instance
+```bash
+# Linux/Mac only
+chmod 400 honeypot-key.pem
 
----
+# SSH into Ubuntu EC2
+ssh -i "path/to/honeypot-key.pem" ubuntu@<YOUR_EC2_PUBLIC_IP>
+```
 
-## Step 2: Configure Security Group (Firewall)
+2. Install Docker, Docker Compose, and Git
+```bash
+sudo apt update
+sudo apt install -y docker.io docker-compose-v2 git curl || sudo apt install -y docker.io docker-compose git curl
 
-1.  In the EC2 Dashboard, go to **Instances**.
-2.  Click on your new instance ID.
-3.  Click the **Security** tab -> Click the **Security Group** (e.g., `sg-xxxx`).
-4.  Click **Edit inbound rules**.
-5.  Address the following rules:
-    - **SSH** (Port 22): source `Anywhere` or `My IP` (Already there).
-    - **Custom TCP** (Port 8080): source `Anywhere` (IPv4 `0.0.0.0/0`). *This is for your API.*
-6.  Click **Save rules**.
+sudo systemctl enable docker
+sudo systemctl start docker
+sudo usermod -aG docker $USER
 
----
+docker --version
+docker-compose --version
+```
 
-## Step 3: Deployment
+3. Re-login so docker group applies
+```bash
+exit
+ssh -i "path/to/honeypot-key.pem" ubuntu@<YOUR_EC2_PUBLIC_IP>
+```
 
-1.  **Connect to your instance**:
-    - Open your terminal (or PowerShell on Windows).
-    - Locate your `.pem` key file.
-    - Run:
-      ```bash
-      # Provide read-only permission to key (Linux/Mac only, skip on Windows)
-      chmod 400 honeypot-key.pem
+4. Clone project
+```bash
+git clone https://github.com/SahilKumar75/Varutri-Honeypot.git
+cd Varutri-Honeypot
+```
 
-      # Connect
-      ssh -i "path/to/honeypot-key.pem" ubuntu@<YOUR_EC2_PUBLIC_IP>
-      ```
+5. Create `.env`
+```bash
+nano .env
+```
+Use at least:
+```env
+AWS_ACCESS_KEY_ID=your_aws_access_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret_key
+AWS_REGION=us-east-1
 
-2.  **Install Docker & Git on Server**:
-    Run these commands inside the SSH session:
-    ```bash
-    # Update packages
-    sudo apt-get update
+VARUTRI_API_KEY=your_api_key
+HUGGINGFACE_API_KEY=your_huggingface_key
 
-    # Install Docker
-    sudo apt-get install -y docker.io docker-compose-v2 git
+WHATSAPP_API_TOKEN=
+WHATSAPP_PHONE_NUMBER_ID=
+WHATSAPP_VERIFY_TOKEN=
+```
 
-    # Start Docker
-    sudo systemctl start docker
-    sudo systemctl enable docker
+6. Build and run containers
+```bash
+docker-compose up -d --build
+```
 
-    # Add user to docker group (avoids using sudo for docker commands)
-    sudo usermod -aG docker $USER
-    ```
-    *Exit the SSH session (`exit`) and log in again for the group change to take effect.*
-
-3.  **Clone the Repository**:
-    ```bash
-    git clone https://github.com/YOUR_GITHUB_USER/Varutri-Honeypot.git
-    cd Varutri-Honeypot
-    ```
-
-4.  **Configure Environment Variables**:
-    Create the `.env` file on the server.
-    ```bash
-    nano .env
-    ```
-    Paste the contents of your local `.env` file (ensure you have your **MongoDB Atlas Connection String** and **API Keys** ready).
-    
-    *Press `Ctrl+X`, then `Y`, then `Enter` to save.*
-
-5.  **Start the Application**:
-    ```bash
-    docker compose up -d --build
-    ```
+7. Check running services
+```bash
+docker-compose ps
+docker-compose logs -f app
+```
 
 ---
 
 ## Step 4: Verify Deployment
 
-1.  Wait a minute for the build to finish and the app to start.
-2.  Check if it's running:
-    ```bash
-    docker compose ps
-    docker compose logs -f
-    ```
-3.  Test via Browser or Postman:
-    `http://<YOUR_EC2_PUBLIC_IP>:8080/api/v1/health`
+Open these URLs:
+- Health: `http://<YOUR_EC2_PUBLIC_IP>:8080/api/health`
+- Swagger UI: `http://<YOUR_EC2_PUBLIC_IP>:8080/swagger-ui.html`
+- OpenAPI JSON: `http://<YOUR_EC2_PUBLIC_IP>:8080/api-docs`
+
+Test chat API:
+```bash
+curl -X POST "http://<YOUR_EC2_PUBLIC_IP>:8080/api/chat" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: <YOUR_VARUTRI_API_KEY>" \
+  -d '{
+    "sessionId":"ec2-test-001",
+    "message":{
+      "sender":"scammer",
+      "text":"Hello, share your UPI for refund",
+      "timestamp":1700000000000
+    },
+    "conversationHistory":[]
+  }'
+```
 
 ---
 
 ## Maintenance
 
-- **Update Code**:
-  ```bash
-  git pull origin main
-  docker compose up -d --build
-  ```
-- **View Logs**:
-  ```bash
-  docker compose logs -f
-  ```
+Update and redeploy:
+```bash
+git pull origin main
+docker-compose up -d --build
+```
+
+Logs:
+```bash
+docker-compose logs -f app
+docker-compose logs -f ml-sidecar
+```
+
+Restart:
+```bash
+docker-compose restart
+```
+
+Stop:
+```bash
+docker-compose down
+```
