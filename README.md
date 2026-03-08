@@ -1,140 +1,152 @@
 # Varutri Honeypot
 
-**India AI Impact Buildathon - Problem 2: Agentic Honey-Pot**
+Agentic scam-engagement platform built for India AI Impact Buildathon (Problem 2: Agentic Honey-Pot).
 
-## Team Information
-
-**Team Name:** AITians
-
-**Team Members:**
-- **Sahil Kumar Singh** (Team Leader) - sahilkumargreat12@gmail.com
-- **Manu Rana** - mmbro1354@gmail.com
-
----
+## Team
+- Team Name: AITians
+- Sahil Kumar Singh (Team Lead)
+- Manu Rana 
+- Ashutosh 
 
 ## Overview
+Varutri engages scammers using a configurable AI persona, extracts actionable intelligence (UPI IDs, bank accounts, IFSC, phone numbers, URLs), performs multi-layer threat scoring, and generates reports for authorities.
 
-An AI-powered honeypot system that engages scammers in realistic conversations using a human persona, automatically extracts threat intelligence (UPI IDs, bank accounts, phone numbers, phishing URLs), detects scam patterns, and collects evidence for law enforcement.
-
-### Key Features
-
-**Agentic AI Engagement** - LLM-powered realistic persona (Rajesh Kumar, 67-year-old retired teacher)  
-**Intelligence Extraction** - Automatic extraction of UPI IDs, bank details, phone numbers, URLs  
-**Scam Detection** - Pattern-based detection of investment, lottery, phishing, and job scams  
-**Threat Assessment** - Real-time threat level calculation (0.0-1.0)  
-**Evidence Collection** - Structured storage of conversations and extracted intelligence  
-**API Integration** - RESTful API for external systems and law enforcement
+## Current Repo Structure
+```text
+AI-for-Bharat/
+  src/main/java/com/varutri/honeypot/
+    controller/        # REST APIs (chat, persona, report, whatsapp, test)
+    service/           # Core logic, LLM, ML integration, security, data
+    config/            # Spring config (AWS, security, OpenAPI)
+    dto/               # Request/response contracts
+    entity/            # Persistence entities
+    repository/        # Data repositories
+  src/main/resources/
+    application.properties
+  ml-sidecar/
+    app.py             # FastAPI ML service (/embed, /classify, /health)
+    Dockerfile
+    requirements.txt
+  frontend/
+    index.html, app.js, style.css
+  docker-compose.yml
+  Dockerfile           # Spring Boot app image
+  DEPLOY.md            # EC2 deployment steps
+```
 
 ## Tech Stack
+- Backend: Spring Boot 3.2.2, Java 17
+- ML Sidecar: FastAPI + sentence-transformers + transformers
+- LLM Providers:
+  - AWS Bedrock (Claude 3 Haiku) provision exists
+  - Hugging Face API (active backup path)
+- Security: API-key based auth (`X-API-Key`)
+- Deployment: Docker Compose (app + ml-sidecar)
 
-- **Backend:** Spring Boot 3.2.2 (Java 17)
-- **LLM:** Hugging Face API (Llama 3.3 70B Instruct)
-- **Security:** Spring Security with API key validation
-- **Intelligence:** Regex-based pattern extraction + keyword detection
-- **Build:** Maven
+## AWS Services Used
+- EC2: host application containers
+- Bedrock Runtime: provisioned for Claude 3 Haiku integration
+- DynamoDB: session/evidence/report persistence
 
-## Quick Start
+## Important LLM Note (Bedrock vs Hugging Face)
+Bedrock Haiku support is implemented in the codebase and configurable via `llm.provider=bedrock`.
 
-### Prerequisites
+At the moment, Bedrock model invocation has ongoing platform-side issues that multiple teams are seeing during the hackathon. Because of this, the project uses Hugging Face as backup (`llm.provider=huggingface`) to keep APIs operational.
 
-- Java 17+
-- Maven
-- Hugging Face API key (get from https://huggingface.co/settings/tokens)
+Hugging Face free-tier limits apply: expect roughly **50-100 requests/hour** depending on model/account throttling.
 
-### Setup
+## Authentication (`X-API-Key`)
+All protected APIs require:
 
-1. Clone repository
+```http
+X-API-Key: your_secure_api_key_here
+```
+
+Sample test value (if you set this in `.env`):
+
+```http
+X-API-Key: varutri_shield_2026
+```
+
+The value comes from `.env`:
+
+```env
+VARUTRI_API_KEY=your_secure_api_key_here
+```
+
+If you set a different value in `.env`, use that exact same value in request headers.
+
+## Local Run
+### Option A: Docker Compose (recommended)
 ```bash
-git clone https://github.com/SahilKumar75/Varutri-Honeypot.git
-cd Varutri-Honeypot
+docker-compose up -d --build
 ```
 
-2. Configure API key in `src/main/resources/application.properties`
-```properties
-llm.provider=huggingface
-huggingface.api-key=YOUR_API_KEY_HERE
-```
-
-3. Build and run
+### Option B: Spring Boot directly
 ```bash
 mvn clean install
 mvn spring-boot:run
 ```
 
-Application starts on `http://localhost:8080`
+## Swagger / OpenAPI
+- Swagger UI: `http://54.81.212.123:8080/swagger-ui/index.html`
+- OpenAPI JSON: `http://54.81.212.123:8080/api-docs`
 
-## API Endpoints
+## Swagger APIs (Current)
+These are the APIs exposed in Swagger.
 
-### POST /api/chat
+### Health
+- `GET /api/health`
 
-**Headers:**
+### Chat and Threat
+- `POST /api/chat`
+- `POST /api/assess`
+- `POST /api/callback/{sessionId}`
+- `GET /api/evidence/{sessionId}`
+- `GET /api/evidence/high-threat`
+- `GET /api/evidence`
+
+### Persona
+- `GET /api/persona`
+- `GET /api/persona/prompt`
+- `PUT /api/persona`
+- `POST /api/persona/reset`
+- `GET /api/persona/presets`
+- `POST /api/persona/presets/{presetName}`
+
+### Reports
+- `POST /api/report/manual`
+- `GET /api/report/{reportId}`
+- `GET /api/report/all`
+- `GET /api/report/stats`
+
+### Not Included in Swagger
+- WhatsApp APIs (`/api/whatsapp/**`) are intentionally excluded.
+- Test simulation APIs (`/api/test/**`) are intentionally excluded.
+
+## Example Request
+```bash
+curl -X POST "http://localhost:8080/api/chat" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your_secure_api_key_here" \
+  -d '{
+    "sessionId":"demo-session-001",
+    "message":{
+      "sender":"scammer",
+      "text":"You won a prize. Share your UPI to claim now.",
+      "timestamp":1700000000000
+    },
+    "conversationHistory":[]
+  }'
 ```
-x-api-key: varutri_shield_2026
-Content-Type: application/json
-```
 
-**Request:**
-```json
-{
-  "sessionId": "session-id",
-  "message": "user message",
-  "conversationHistory": []
-}
-```
+## Key Environment Variables
+See `.env.example` for full list.
 
-**Response:**
-```json
-{
-  "status": "success",
-  "reply": "AI response"
-}
-```
-
-### GET /health
-
-Health check endpoint
-
-## Intelligence Extraction
-
-Automatically detects:
-- UPI IDs: `user@paytm`, `9876543210@ybl`
-- Bank accounts with IFSC codes
-- Phishing URLs
+Required:
+- `VARUTRI_API_KEY`
+- `HUGGINGFACE_API_KEY` (if using Hugging Face)
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` (for AWS integrations)
 
 ## Deployment
-
-### Local Development
-Use ngrok for public access:
-```bash
-ngrok http 8080
-```
-
-### Cloud Deployment
-
-#### Azure for Students (Recommended) 🚀
-Deploy to Azure with $100 free credit:
-```bash
-./deploy-to-azure.sh
-```
-See [AZURE_QUICKSTART.md](AZURE_QUICKSTART.md) for details.
-
-#### Render
-Already configured - push to GitHub and connect Render.
-
-## Configuration
-
-Key settings in `application.properties`:
-- `llm.provider`: `huggingface` or `ollama`
-- `huggingface.api-key`: Your HF API key
-- `varutri.api-key`: API key for requests (default: `varutri_shield_2026`)
-- `hackathon.callback-url`: GUVI callback endpoint
-- `varutri.session.max-turns`: Max conversation turns (default: 20)
-
-## Team
-
-- Lead Developer: SahilKumar75
-- Teammate: manurana26770
-
-## License
-
-Built for India AI Impact Buildathon 2026
+Use `DEPLOY.md` for EC2 setup and troubleshooting.
