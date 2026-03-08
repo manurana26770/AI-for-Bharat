@@ -81,6 +81,9 @@ docker-compose ps
 docker-compose logs -f app
 ```
 
+> **Note:** the ML sidecar container uses a curl-based healthcheck. curl is installed in the image to avoid `unhealthy` status errors.
+
+
 ---
 
 ## Step 4: Verify Deployment
